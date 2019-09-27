@@ -1,5 +1,4 @@
 --parallel
---evalTrain
 --retainVal
 --useEMA
 --lrReduce
@@ -20,3 +19,4 @@
 --readMemProj
 --readCtrl
 --writeMemProj
+--test

@@ -1,0 +1,29 @@
+#!/bin/bash
+# File              : .sync
+# Author            : Chi Han, Jiayuan Mao
+# Email             : haanchi@gmail.com, maojiayuan@gmail.com
+# Date              : 21.07.2019
+# Last Modified Date: 10.09.2019
+# Last Modified By  : Chi Han
+#
+# This file is part of the VCML codebase
+# Distributed under MIT license
+#
+# This executable file is part of a vim-plugin, and is called to 
+# automatically sync a file up to the appointed server. For more
+# information, please check git repository:
+# https://github.com/eshion/vim-sync.git.
+
+
+hostname='vision11.csail.mit.edu'
+relative_path='iLab/mac-network'
+
+cd $(dirname $0)
+
+if [[ 'upload' == $1 ]]; then
+    rsync -azcul --relative "$2/$3" "$hostname:$relative_path"
+elif [[ 'download' == $1 ]]; then
+    rsync -azcul --relative "$hostname:$relative_path/$2/$3" "$2/$3"
+fi
+
+cd -
