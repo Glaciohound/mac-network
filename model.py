@@ -91,7 +91,7 @@ class MACnet(object):
                 with slim.arg_scope(nets.resnet_v2.resnet_arg_scope()):
                     self.resnet, self.resnet_end_points = \
                         nets.resnet_v2.resnet_v2_101(
-                            self.raw_images, 0, is_training=True)
+                            self.raw_images, 1001, is_training=True)
                 self.imagesAll = \
                     self.resnet_end_points['Placeholders/resnet_v2_101/block3/unit_23/bottleneck_v2']
             # self.imageH = tf.shape(self.imagesAll)[1]

@@ -46,7 +46,7 @@ class Config(object):
 
     weightsPath = "../data/log/mac/tf_version/weights"
     weightsFilename = "weights{epoch}.ckpt"
-    resnet_ckpt = "../data/cache/resnet_v1_101_2016_08_28.tar.gz"
+    resnet_ckpt = "../data/cache/resnet_v2_101.ckpt"
 
     # model predictions and optionally attention maps
     predsPath = "../data/log/mac/tf_version/preds"

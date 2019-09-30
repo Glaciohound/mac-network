@@ -197,6 +197,20 @@ def setSavers(model):
         relevantVars = [var for var in tf.global_variables() if isRelevant(var)]
         subsetSaver = tf.train.Saver(relevantVars, max_to_keep = config.weightsToKeep, allow_empty = True)
 
+    if model.raw:
+        def rename_weight(name):
+            name = '/'.join(name.split('/')[1:])
+            if name.endswith(':0'):
+                name = name[:-2]
+            return name
+        resnet_weights_dict = {
+            rename_weight(weight.name): weight
+            for weight in slim.get_model_variables()
+        }
+        resnet_saver = tf.train.Saver(resnet_weights_dict)
+    else:
+        resnet_saver = None
+
     emaSaver = None
     if config.useEMA:
         emaSaver = tf.train.Saver(model.emaDict, max_to_keep = config.weightsToKeep)
@@ -204,13 +218,14 @@ def setSavers(model):
     return {
         "saver": saver,
         "subsetSaver": subsetSaver,
-        "emaSaver": emaSaver
+        "emaSaver": emaSaver,
+        'resnet_saver': resnet_saver,
     }
 
 ################################### restore / initialize weights ##################################
 # Restores weights of specified / last epoch if on restore mod.
 # Otherwise, initializes weights.
-def loadWeights(sess, saver, init, with_resnet, resnet_ckpt):
+def loadWeights(sess, saver, init, resnet_saver):
     if config.restoreEpoch > 0 or config.restore:
         # restore last epoch only if restoreEpoch isn't set
         if config.restoreEpoch == 0:
@@ -223,14 +238,8 @@ def loadWeights(sess, saver, init, with_resnet, resnet_ckpt):
     else:
         print(bcolored("Initializing weights", "blue"))
         sess.run(init)
-        if with_resnet:
-            resnet_weights = slim.get_model_variables()
-            tf.logging.info('Fine-tuning from %s' % resnet_ckpt)
-            from IPython import embed; embed()
-            sess.run(slim.assign_from_checkpoint_fn(
-                resnet_ckpt, resnet_weights, ignore_missing_vars=True
-            ))
-            from IPython import embed; embed()
+        if resnet_saver is not None:
+            resnet_saver.restore(sess, config.resnet_ckpt)
         logInit()
         epoch = 0
 
@@ -730,7 +739,8 @@ def main():
 
     # savers
     savers = setSavers(model)
-    saver, emaSaver = savers["saver"], savers["emaSaver"]
+    saver, emaSaver, resnet_saver = \
+        savers["saver"], savers["emaSaver"], savers['resnet_saver']
 
     # sessionConfig
     sessionConfig = setSession()
@@ -741,9 +751,7 @@ def main():
         sess.graph.finalize()
 
         # restore / initialize weights, initialize epoch variable
-        epoch = loadWeights(sess, saver, init,
-                            with_resnet=config.raw_image,
-                            resnet_ckpt=config.resnet_ckpt)
+        epoch = loadWeights(sess, saver, init, resnet_saver)
 
         if config.train:
             start0 = time.time()
