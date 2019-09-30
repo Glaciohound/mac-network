@@ -4,7 +4,7 @@
 # Author            : Chi Han
 # Email             : haanchi@gmail.com
 # Date              : 13.09.2019
-# Last Modified Date: 13.09.2019
+# Last Modified Date: 30.09.2019
 # Last Modified By  : Chi Han
 #
 # Welcome to this little kennel of Glaciohound!
@@ -14,6 +14,8 @@ import time
 import math
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib import slim
+from tensorflow.contrib.slim import nets
 
 import ops
 from config import config
@@ -41,9 +43,10 @@ class MACnet(object):
         embeddingsInit: initialization for word embeddings (random / glove).
         answerDict: answers dictionary (mapping between integer id and symbol).
     '''
-    def __init__(self, embeddingsInit, answerDict):
+    def __init__(self, embeddingsInit, answerDict, raw):
         self.embeddingsInit = embeddingsInit
         self.answerDict = answerDict
+        self.raw = raw
         self.build()
 
     '''
@@ -76,8 +79,21 @@ class MACnet(object):
 
             # images
             # put image known dimension as last dim?
-            self.imagesPlaceholder = tf.placeholder(tf.float32, shape = (None, None, None, None))
-            self.imagesAll = tf.transpose(self.imagesPlaceholder, (0, 2, 3, 1))
+            if not self.raw:
+                self.imagesPlaceholder = tf.placeholder(tf.float32, shape = (None, None, None, None))
+                self.imagesAll = tf.transpose(self.imagesPlaceholder,
+                                              (0, 2, 3, 1))
+            else:
+                self.imagesPlaceholder = tf.placeholder(
+                    tf.float32, shape=(None, 3, None, None))
+                self.raw_images = tf.transpose(self.imagesPlaceholder,
+                                               (0, 2, 3, 1))
+                with slim.arg_scope(nets.resnet_v2.resnet_arg_scope()):
+                    self.resnet, self.resnet_end_points = \
+                        nets.resnet_v2.resnet_v2_101(
+                            self.raw_images, 0, is_training=True)
+                self.imagesAll = \
+                    self.resnet_end_points['Placeholders/resnet_v2_101/block3/unit_23/bottleneck_v2']
             # self.imageH = tf.shape(self.imagesAll)[1]
             # self.imageW = tf.shape(self.imagesAll)[2]
 
@@ -741,7 +757,7 @@ class MACnet(object):
 
     Returns results: e.g. loss, accuracy, running time.
     '''
-    def runBatch(self, sess, data, images, train, getAtt = False):
+    def runBatch(self, sess, data, images, train, getAtt = False, raw=False):
         data = self.trimData(data)
 
         trainOp = self.trainOp if train else self.noOp

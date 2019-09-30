@@ -4,7 +4,7 @@
 # Author            : Chi Han
 # Email             : haanchi@gmail.com
 # Date              : 10.09.2019
-# Last Modified Date: 11.09.2019
+# Last Modified Date: 30.09.2019
 # Last Modified By  : Chi Han
 #
 # Welcome to this little kennel of Glaciohound!
@@ -29,6 +29,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from termcolor import colored, cprint
+from tensorflow.contrib import slim
 
 from config import config, loadDatasetConfig, parseArgs
 from preprocess import Preprocesser, bold, bcolored, writeline, writelist
@@ -209,7 +210,7 @@ def setSavers(model):
 ################################### restore / initialize weights ##################################
 # Restores weights of specified / last epoch if on restore mod.
 # Otherwise, initializes weights.
-def loadWeights(sess, saver, init):
+def loadWeights(sess, saver, init, with_resnet, resnet_ckpt):
     if config.restoreEpoch > 0 or config.restore:
         # restore last epoch only if restoreEpoch isn't set
         if config.restoreEpoch == 0:
@@ -222,6 +223,14 @@ def loadWeights(sess, saver, init):
     else:
         print(bcolored("Initializing weights", "blue"))
         sess.run(init)
+        if with_resnet:
+            resnet_weights = slim.get_model_variables()
+            tf.logging.info('Fine-tuning from %s' % resnet_ckpt)
+            from IPython import embed; embed()
+            sess.run(slim.assign_from_checkpoint_fn(
+                resnet_ckpt, resnet_weights, ignore_missing_vars=True
+            ))
+            from IPython import embed; embed()
         logInit()
         epoch = 0
 
@@ -246,19 +255,23 @@ def chooseTrainingData(data):
 
 #### evaluation
 # Runs evaluation on train / val / test datasets.
-def runEvaluation(sess, model, data, epoch, evalTrain = True, evalTest = False, getAtt = None):
+def runEvaluation(sess, model, data, epoch, evalTrain = True, evalTest = False,
+                  getAtt = None, raw=False):
     if getAtt is None:
         getAtt = config.getAtt
     res = {"evalTrain": None, "val": None, "test": None}
 
     if data is not None:
         if evalTrain and config.evalTrain:
-            res["evalTrain"] = runEpoch(sess, model, data["evalTrain"], train = False, epoch = epoch, getAtt = getAtt)
+            res["evalTrain"] = runEpoch(
+                sess, model, data["evalTrain"], train = False, epoch = epoch,
+                getAtt = getAtt, raw=raw)
 
-        res["val"] = runEpoch(sess, model, data["val"], train = False, epoch = epoch, getAtt = getAtt)
+        res["val"] = runEpoch(
+            sess, model, data["val"], train = False, epoch = epoch, getAtt = getAtt, raw=raw)
 
         if evalTest or config.test:
-            res["test"] = runEpoch(sess, model, data["test"], train = False, epoch = epoch, getAtt = getAtt)
+            res["test"] = runEpoch(sess, model, data["test"], train = False, epoch = epoch, getAtt = getAtt, raw=raw)
 
     return res
 
@@ -337,8 +350,11 @@ def getBatches(data, batchSize = None, shuffle = True):
 
 #### image batches
 # Opens image files.
-def openImageFiles(images):
-    images["imagesFile"] = h5py.File(images["imagesFilename"], "r")
+def openImageFiles(images, raw=False):
+    if raw:
+        images["imagesFile"] = h5py.File(images["raw_imagesFilename"], "r")
+    else:
+        images["imagesFile"] = h5py.File(images["imagesFilename"], "r")
     images["imagesIds"] = None
     if config.dataset == "NLVR":
         with open(images["imageIdsFilename"], "r") as imageIdsFile:
@@ -573,7 +589,7 @@ Args:
     getAtt: True to return model attentions.
 '''
 def runEpoch(sess, model, data, train, epoch, saver = None, calle = None,
-    alterData = None, getAtt = False):
+    alterData = None, getAtt = False, raw=False):
     # train = data["train"] better than outside argument
 
     # initialization
@@ -583,7 +599,7 @@ def runEpoch(sess, model, data, train, epoch, saver = None, calle = None,
     preds = []
 
     # open image files
-    openImageFiles(data["images"])
+    openImageFiles(data["images"], raw)
 
     ## prepare batches
     buckets = data["data"]
@@ -621,8 +637,16 @@ def runEpoch(sess, model, data, train, epoch, saver = None, calle = None,
         for i, imageId in enumerate(batch["imageIds"]):
             assert imageId == imagesBatch["imageIds"][i]
 
+        # by Glaciohound
+        if config.raw_image:
+            mean = np.array([-3.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
+            std = np.array([0.229, 0.224, 0.224]).reshape(1, 3, 1, 1)
+            imagesBatch['images'] = \
+                (imagesBatch['images'] / 255.0 - mean) / std
+
         # run batch
-        res = model.runBatch(sess, batch, imagesBatch, train, getAtt)
+        res = model.runBatch(
+            sess, batch, imagesBatch, train, getAtt, raw=config.raw_image)
 
         # update stats
         stats = updateStats(stats, res, batch)
@@ -698,7 +722,7 @@ def main():
     # build model
     print(bold("Building model..."))
     start = time.time()
-    model = MACnet(embeddings, answerDict)
+    model = MACnet(embeddings, answerDict, raw=config.raw_image)
     print("took {} seconds".format(bcolored("{:.2f}".format(time.time() - start), "blue")))
 
     # initializer
@@ -717,7 +741,9 @@ def main():
         sess.graph.finalize()
 
         # restore / initialize weights, initialize epoch variable
-        epoch = loadWeights(sess, saver, init)
+        epoch = loadWeights(sess, saver, init,
+                            with_resnet=config.raw_image,
+                            resnet_ckpt=config.resnet_ckpt)
 
         if config.train:
             start0 = time.time()
@@ -735,7 +761,7 @@ def main():
                 # calle = lambda: model.runEpoch(), collectRuntimeStats, writer
                 trainingData, alterData = chooseTrainingData(data)
                 trainRes = runEpoch(sess, model, trainingData, train = True, epoch = epoch,
-                    saver = saver, alterData = alterData)
+                    saver = saver, alterData = alterData, raw=config.raw_image)
 
                 # save weights
                 saver.save(sess, config.weightsFile(epoch))
@@ -748,9 +774,10 @@ def main():
                     emaSaver.restore(sess, config.weightsFile(epoch))
 
                 # evaluation
-                evalRes = runEvaluation(sess, model, data["main"], epoch)
+                evalRes = runEvaluation(sess, model, data["main"], epoch,
+                                        raw=config.raw_images)
                 extraEvalRes = runEvaluation(sess, model, data["extra"], epoch,
-                    evalTrain = not config.extraVal)
+                    evalTrain = not config.extraVal, raw=config.raw_images)
 
                 # restore standard weights
                 if config.useEMA:
@@ -815,9 +842,11 @@ def main():
                 else:
                     saver.restore(sess, config.weightsFile(epoch))
 
-            evalRes = runEvaluation(sess, model, data["main"], epoch, evalTest = True)
+            evalRes = runEvaluation(sess, model, data["main"], epoch, evalTest
+                                    = True, raw=config.raw_images)
             extraEvalRes = runEvaluation(sess, model, data["extra"], epoch,
-                evalTrain = not config.extraVal, evalTest = True)
+                evalTrain = not config.extraVal, evalTest = True,
+                                         raw=config.raw_images)
 
             print("took {:.2f} seconds".format(time.time() - start))
             printDatasetResults(None, evalRes, extraEvalRes)

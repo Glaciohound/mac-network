@@ -4,7 +4,7 @@
 # Author            : Chi Han, Jiayuan Mao
 # Email             : haanchi@gmail.com, maojiayuan@gmail.com
 # Date              : 10.09.2019
-# Last Modified Date: 13.09.2019
+# Last Modified Date: 30.09.2019
 # Last Modified By  : Chi Han
 #
 # This file is part of the VCML codebase
@@ -33,6 +33,7 @@ class Config(object):
 
     # file names
     imagesFilename = "{tier}.h5" # Images
+    raw_imagesFilename = "{tier}_raw.h5" # Images
     instancesFilename = "{tier}Instances.json"
     # symbols dictionaries
     questionDictFilename = "questionDict.pkl"
@@ -45,6 +46,7 @@ class Config(object):
 
     weightsPath = "../data/log/mac/tf_version/weights"
     weightsFilename = "weights{epoch}.ckpt"
+    resnet_ckpt = "../data/cache/resnet_v1_101_2016_08_28.tar.gz"
 
     # model predictions and optionally attention maps
     predsPath = "../data/log/mac/tf_version/preds"
@@ -80,6 +82,7 @@ class Config(object):
     datasetFile     = lambda self, tier: self.dataFile(self.datasetFilename.format(tier = tier))
     imagesIdsFile   = lambda self, tier: self.dataFile(self.imgIdsFilename.format(tier = tier)) #
     imagesFile      = lambda self, tier: self.dataFile(self.imagesFilename.format(tier = tier))
+    raw_imagesFile      = lambda self, tier: self.dataFile(self.raw_imagesFilename.format(tier = tier))
     instancesFile   = lambda self, tier: self.generatedFile(self.instancesFilename.format(tier = tier))
 
     questionDictFile    = lambda self: self.generatedFile(self.questionDictFilename)
@@ -107,6 +110,10 @@ config = Config()
 ###################################### arguments ######################################
 def parseArgs():
     parser = argparse.ArgumentParser(fromfile_prefix_chars = "@")
+
+    ################ by Glaciohound
+
+    parser.add_argument('--raw_image', action='store_true')
 
     ################ systems
 
