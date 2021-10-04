@@ -4,7 +4,7 @@
 # Author            : Chi Han
 # Email             : haanchi@gmail.com
 # Date              : 10.09.2019
-# Last Modified Date: 30.09.2019
+# Last Modified Date: 01.10.2019
 # Last Modified By  : Chi Han
 #
 # Welcome to this little kennel of Glaciohound!
@@ -29,7 +29,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from termcolor import colored, cprint
-from tensorflow.contrib import slim
+import tensorflow.contrib.slim as slim
 
 from config import config, loadDatasetConfig, parseArgs
 from preprocess import Preprocesser, bold, bcolored, writeline, writelist
@@ -783,9 +783,9 @@ def main():
 
                 # evaluation
                 evalRes = runEvaluation(sess, model, data["main"], epoch,
-                                        raw=config.raw_images)
+                                        raw=config.raw_image)
                 extraEvalRes = runEvaluation(sess, model, data["extra"], epoch,
-                    evalTrain = not config.extraVal, raw=config.raw_images)
+                    evalTrain = not config.extraVal, raw=config.raw_image)
 
                 # restore standard weights
                 if config.useEMA:
@@ -851,10 +851,10 @@ def main():
                     saver.restore(sess, config.weightsFile(epoch))
 
             evalRes = runEvaluation(sess, model, data["main"], epoch, evalTest
-                                    = True, raw=config.raw_images)
+                                    = True, raw=config.raw_image)
             extraEvalRes = runEvaluation(sess, model, data["extra"], epoch,
                 evalTrain = not config.extraVal, evalTest = True,
-                                         raw=config.raw_images)
+                                         raw=config.raw_image)
 
             print("took {:.2f} seconds".format(time.time() - start))
             printDatasetResults(None, evalRes, extraEvalRes)
